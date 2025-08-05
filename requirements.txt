@@ -1,2 +1,7 @@
 google-genai
 Pillow
+fastapi
+uvicorn[standard]
+opencv-python
+scipy
+numpy
