@@ -5,3 +5,4 @@ uvicorn[standard]
 opencv-python
 scipy
 numpy
+vertexai
