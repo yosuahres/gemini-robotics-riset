@@ -12,31 +12,27 @@ from concurrent.futures import ThreadPoolExecutor
 
 API_KEY = os.getenv("GOOGLE_API_KEY")
 MODEL_ID = "gemini-2.5-pro"
-OBJECT_TO_TRACK = "human nose"
-PROMPT = f"""
-  Pinpoint to the {OBJECT_TO_TRACK} in the image.
-  The answer should be a single bounding box in the format: [y_min, x_min, y_max, x_max].
-  The points are normalized to 0-1000.
-"""
+OBJECT_TO_TRACK = "nose" 
 
-# --- Helper Functions ---
-def get_initial_bounding_box(frame):
-    """
-    Uses the GenAI API to get the initial bounding box for the object.
-    """
-    print("Detecting object with GenAI...")
+def get_initial_bounding_box(frame, object_to_track):
     try:
+        prompt = f"""
+          Pinpoint to the {object_to_track} in the image.
+          The answer should be a single bounding box in the format: [y_min, x_min, y_max, x_max].
+          The points are normalized to 0-1000.
+        """
+
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_frame)
-        pil_image.thumbnail((800, 800), Image.Resampling.LANCZOS)
+        pil_image.thumbnail((512, 512), Image.Resampling.LANCZOS) 
 
         client = genai.Client(api_key=API_KEY)
         response = client.models.generate_content(
             model=MODEL_ID,
-            contents=[pil_image, PROMPT],
+            contents=[pil_image, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                temperature=0.1
+                temperature=0.4
             )
         )
 
@@ -55,8 +51,8 @@ def get_initial_bounding_box(frame):
             return None
 
         if "box_2d" not in response_data:
-            print(f"Error: 'box_2d' not in response: {response_data}")
-            return None
+            print(f"Warning: 'box_2d' not in response. Object likely not found.")
+            return "not_found"
             
         bbox_normalized = response_data['box_2d']
         if not isinstance(bbox_normalized, list) or len(bbox_normalized) != 4:
@@ -78,9 +74,6 @@ def get_initial_bounding_box(frame):
         return None
 
 def camera_thread(camera, frame_queue):
-    """
-    Continuously captures frames from the camera and puts them in a queue.
-    """
     while True:
         ret, frame = camera.read()
         if not ret:
@@ -90,9 +83,6 @@ def camera_thread(camera, frame_queue):
     camera.release()
 
 def main():
-    """
-    Main function to run the object tracker.
-    """
     if not API_KEY:
         print("Error: GOOGLE_API_KEY not found in environment")
         return
@@ -111,9 +101,13 @@ def main():
 
     executor = ThreadPoolExecutor(max_workers=1)
     detection_future = None
-
     tracker = None
     bbox = None
+    object_to_track = OBJECT_TO_TRACK
+    capture_mode = False
+    capture_start_time = 0
+    capture_duration = 0.5 
+    frame_for_detection = None
 
     while True:
         if frame_queue.empty():
@@ -124,19 +118,30 @@ def main():
 
         if detection_future:
             if detection_future.done():
-                initial_bbox = detection_future.result()
-                if initial_bbox:
-                    tracker = cv2.TrackerCSRT_create()
-                    tracker.init(frame, initial_bbox)
-                    bbox = initial_bbox
-                detection_future = None
+                result = detection_future.result()
+                if isinstance(result, tuple): 
+                    tracker = cv2.TrackerCSRT_create() 
+                    tracker.init(frame_for_detection, result)
+                    bbox = result
+                elif result == "not_found":
+                    detection_future = None 
+                    frame_for_detection = None 
             else:
                 cv2.putText(frame, "Detecting...", (20, 40),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
 
+        elif capture_mode:
+            cv2.putText(frame, "Get Ready...", (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 0), 2)
+            if time.time() - capture_start_time > capture_duration:
+                capture_mode = False
+                frame_for_detection = frame.copy()
+                detection_future = executor.submit(get_initial_bounding_box, frame_for_detection, object_to_track)
+
         elif tracker is None:
-            cv2.putText(frame, "Press 's' to start tracking", (20, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+            if not detection_future: 
+                 cv2.putText(frame, f"Yosua Hares|5025221270", (20, 40),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
         else:
             success, bbox = tracker.update(frame)
 
@@ -144,14 +149,12 @@ def main():
                 center_x = int(bbox[0] + bbox[2] / 2)
                 center_y = int(bbox[1] + bbox[3] / 2)
                 cv2.circle(frame, (center_x, center_y), 8, (0, 255, 0), -1)
-                cv2.putText(frame, "Tracking", (center_x - 30, center_y - 20),
+                cv2.putText(frame, f"Tracking '{object_to_track}'", (center_x - 50, center_y - 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             else:
-                cv2.putText(frame, "Tracking failed! Re-acquiring...", (20, 80),
+                cv2.putText(frame, "Tracking lost.", (20, 100),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
-                tracker = None # Reset tracker
-                if detection_future is None:
-                    detection_future = executor.submit(get_initial_bounding_box, frame.copy())
+                tracker = None
 
 
         cv2.imshow('Object Tracker', frame)
@@ -159,8 +162,18 @@ def main():
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             break
-        elif key == ord('s') and tracker is None and detection_future is None:
-            detection_future = executor.submit(get_initial_bounding_box, frame.copy())
+        elif key == ord('s') and tracker is None and detection_future is None and not capture_mode:
+            capture_mode = True
+            capture_start_time = time.time()
+        elif key == ord('n') and detection_future is None and not capture_mode:
+            tracker = None
+            bbox = None
+            cv2.destroyAllWindows() 
+            new_object = input("Enter the new object to track: ")
+            if new_object:
+                object_to_track = new_object
+            cv2.imshow('Object Tracker', frame)
+
 
     executor.shutdown(wait=False)
     cv2.destroyAllWindows()

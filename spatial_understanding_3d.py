@@ -9,7 +9,7 @@ from google.genai import types
 
 API_KEY = os.getenv("GOOGLE_API_KEY")
 MODEL_ID = "gemini-2.5-pro"
-DEFAULT_IMAGE_PATH = "image-testing/kettle_01.jpeg"
+DEFAULT_IMAGE_PATH = "image-testing/multiplekursi.jpeg"
 
 def initialize_client(api_key):
     return genai.Client(api_key=api_key)
@@ -31,7 +31,6 @@ def get_points_from_image(client, model_id, image, prompt):
             temperature=0.1
         )
     )
-    # Add a check for empty response
     if not response.text:
         print("Error: Received an empty response from the API.")
         if response.prompt_feedback:
@@ -47,7 +46,6 @@ def draw_points(image, points):
     draw = ImageDraw.Draw(image)
     for item in points:
         point = item['point']
-        # Convert normalized coordinates (0-1000) to actual pixel coordinates
         x = int(point[1] / 1000.0 * image.width)
         y = int(point[0] / 1000.0 * image.height)
 
@@ -56,22 +54,19 @@ def draw_points(image, points):
         draw.text((x + 10, y), item['label'], fill='red')
 
 def parse_json(json_output):
-    # Parsing out the markdown fencing
     lines = json_output.splitlines()
     for i, line in enumerate(lines):
         if line == "```json":
-            json_output = "\n".join(lines[i+1:])  # Remove everything before "```json"
-            json_output = json_output.split("```")[0]  # Remove everything after the closing "```"
-            break  # Exit the loop once "```json" is found
+            json_output = "\n".join(lines[i+1:]) 
+            json_output = json_output.split("```")[0] 
+            break 
     return json_output
 
 def generate_point_html(pil_image, points_data):
-    # Convert PIL image to base64 string
     buffered = BytesIO()
     pil_image.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode()
     
-    # Convert points to JSON string
     points_json = json.dumps(points_data)
 
     return f"""
@@ -288,7 +283,6 @@ if __name__ == "__main__":
         print(e)
         exit()
 
-    # print the model
     print(f"Using model: {MODEL_ID}")
     pointing_image = load_and_resize_image(args.image_path)
 
@@ -304,13 +298,11 @@ if __name__ == "__main__":
             for item in points:
                 print(f"  - Label: {item['label']}, Point: {item['point']}")
             
-            # Generate traditional image with points
             pointing_image_with_results = pointing_image.copy()
             draw_points(pointing_image_with_results, points)
             pointing_image_with_results.save("results/pointing_results.jpg")
             print("Pointing results saved to results/pointing_results.jpg")
             
-            # Generate HTML visualization
             html_content = generate_point_html(pointing_image.copy(), points)
             with open("results/pointing_results.html", "w", encoding="utf-8") as f:
                 f.write(html_content)
