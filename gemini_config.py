@@ -53,7 +53,7 @@ Assessment Categories:
 Provide quality assessment to improve tracking performance."""
 
 generation_config = {
-    "max_output_tokens": 10,
+    "max_output_tokens": 100,  # Increased for JSON responses
     "temperature": 0.1,
     "top_p": 0.3,
     "top_k": 10,
