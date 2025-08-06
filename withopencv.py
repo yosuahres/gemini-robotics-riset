@@ -9,88 +9,12 @@ from google.genai import types
 import threading
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
-from gemini_config import OBJECT_TO_TRACK
-
-# Object detection prompt for bounding box detection
-object_detection_prompt = """Analyze this image and locate the {object}. 
-
-Return ONLY a JSON object with the bounding box coordinates in this exact format:
-{{
-    "box_2d": [top, left, bottom, right]
-}}
-
-The coordinates should be normalized values between 0-1000.
-If the {object} is not found, return: {{"box_2d": null}}
-
-Image analysis:"""
-
-class SimpleTracker:
-    def __init__(self):
-        self.bbox = None
-        self.prev_gray = None
-        self.points = None
-        
-    def init(self, frame, bbox):
-        self.bbox = bbox
-        x, y, w, h = [int(v) for v in bbox]
-        
-        # Convert to grayscale
-        self.prev_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
-        # Create a grid of points within the bounding box
-        step = 10
-        points = []
-        for i in range(x + step, x + w, step):
-            for j in range(y + step, y + h, step):
-                if i < frame.shape[1] and j < frame.shape[0]:
-                    points.append([[float(i), float(j)]])
-        
-        if len(points) > 0:
-            self.points = np.array(points, dtype=np.float32)
-            return True
-        return False
-    
-    def update(self, frame):
-        if self.points is None or len(self.points) == 0:
-            return False, self.bbox
-            
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
-        # Calculate optical flow
-        lk_params = dict(winSize=(15, 15),
-                        maxLevel=2,
-                        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-        
-        new_points, status, error = cv2.calcOpticalFlowPyrLK(
-            self.prev_gray, gray, self.points, None, **lk_params)
-        
-        # Filter good points
-        good_points = new_points[status == 1]
-        
-        if len(good_points) < 3:  # Need at least 3 points for tracking
-            return False, self.bbox
-            
-        # Calculate new bounding box from good points
-        x_min, y_min = np.min(good_points, axis=0)
-        x_max, y_max = np.max(good_points, axis=0)
-        
-        # Add some padding
-        padding = 20
-        x_min = max(0, x_min - padding)
-        y_min = max(0, y_min - padding)
-        x_max = min(frame.shape[1], x_max + padding)
-        y_max = min(frame.shape[0], y_max + padding)
-        
-        self.bbox = (x_min, y_min, x_max - x_min, y_max - y_min)
-        self.points = good_points.reshape(-1, 1, 2)
-        self.prev_gray = gray.copy()
-        
-        return True, self.bbox
+from gemini_config import OBJECT_TO_TRACK, goal_setter_system_prompt
 
 def get_initial_bounding_box(frame, object_to_track):
     try:
-        # Use the object detection prompt
-        prompt = object_detection_prompt.format(object=object_to_track)
+        # Use the improved goal_setter_system_prompt from config
+        prompt = goal_setter_system_prompt.format(object=object_to_track)
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_frame)
@@ -201,16 +125,40 @@ def main():
                 if isinstance(result, tuple): 
                     print(f"Initializing tracker with bbox: {result}")
                     
-                    # Use our custom SimpleTracker
-                    tracker = SimpleTracker()
-                    success = tracker.init(frame_for_detection, result)
+                    # Validate and convert bounding box format for CSRT
+                    x, y, w, h = result
+                    
+                    # Ensure positive dimensions and within frame bounds
+                    frame_h, frame_w = frame_for_detection.shape[:2]
+                    x = max(0, min(x, frame_w - 1))
+                    y = max(0, min(y, frame_h - 1))
+                    w = max(1, min(w, frame_w - x))
+                    h = max(1, min(h, frame_h - y))
+                    
+                    bbox_rect = (x, y, w, h)
+                    print(f"Validated bbox: {bbox_rect} for frame size: {frame_w}x{frame_h}")
+                    
+                    # Use OpenCV CSRT tracker
+                    tracker = cv2.TrackerCSRT_create()
+                    success = tracker.init(frame_for_detection, bbox_rect)
                     
                     if success:
-                        bbox = result
-                        print("Custom tracker initialized successfully")
+                        bbox = bbox_rect
+                        print("CSRT tracker initialized successfully")
                     else:
-                        print("Failed to initialize custom tracker")
-                        tracker = None
+                        print("Failed to initialize CSRT tracker")
+                        # Try with legacy tracker as fallback
+                        try:
+                            tracker = cv2.legacy.TrackerCSRT_create()
+                            success = tracker.init(frame_for_detection, bbox_rect)
+                            if success:
+                                bbox = bbox_rect
+                                print("Legacy CSRT tracker initialized successfully")
+                            else:
+                                tracker = None
+                        except:
+                            print("Legacy tracker also failed")
+                            tracker = None
                     detection_future = None
                     frame_for_detection = None
                 elif result == "not_found":
@@ -242,14 +190,10 @@ def main():
                 center_y = int(bbox[1] + bbox[3] / 2)
                 print(f"Drawing circle at: ({center_x}, {center_y})")
                 
-                # Draw bounding box
-                cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), 
-                             (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3])), (255, 0, 0), 2)
+                # cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), 
+                #              (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3])), (255, 0, 0), 2)
                 
-                # Draw center point
                 cv2.circle(frame, (center_x, center_y), 8, (0, 255, 0), -1)
-                cv2.putText(frame, f"Tracking '{object_to_track}'", (center_x - 50, center_y - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             else:
                 cv2.putText(frame, "Tracking lost.", (20, 100),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)

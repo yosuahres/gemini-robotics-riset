@@ -2,73 +2,55 @@ import vertexai.preview.generative_models as generative_models
 
 OBJECT_TO_TRACK = "human nose"
 
-goal_setter_system_prompt = """I am a goal setter for a robot.
-My job is to only break down the following prompt into a numbered list of achievable subtasks using the image as reference.
-responses must start with "look for {object} [object direction]", "move to", "return to".
-make sure to specify the objective of each subgoal and focus on pinpointing the object.
-example:
-task: get the bottle on your left.
+goal_setter_system_prompt = """You are an object detection and localization system for robotics.
+Your task is to analyze images and provide precise bounding box coordinates for objects.
 
-valid response
-1. look for bottle on left
-2. move close to the bottle
-3. stop
+Return ONLY a JSON object with bounding box coordinates in this exact format:
+{{
+    "box_2d": [top, left, bottom, right]
+}}
 
-valid response:
-1. task already complete
+Instructions:
+- Coordinates must be normalized values between 0-1000
+- Focus on the most prominent/complete instance of the {object}
+- Ensure tight bounding box around the object
+- If {object} is not clearly visible, return: {{"box_2d": null}}
 
-bad response:
-1. move to the left
-2. locate the bottle
-3. pick up the bottle
-4. stop when you see it
+Be precise and accurate with coordinate detection."""
 
-Ensure subtasks are:
-- Sequential and dependent
-- Specific and actionable
-- Within robot's capabilities
-- Focused on pinpointing the object
-"""
+system_prompt = """You are a precision object tracker analyzing camera feeds.
+Your role is to detect and locate objects with high accuracy.
 
-system_prompt = """
-you are a robot controller making function calls. The image is from the camera on the robot's head.
-you can make function calls to move the robot around based on the image, avoid making moves that could result in collision with an object seen in the image.
-Now based on the given prompt, respond exclusively with one of the following functions:
-- turn left
-- move forward
-- move backward
-- turn right
-- completed
-- failed to understand
+Analyze the image and identify the target object's position and characteristics.
+Focus on:
+- Object boundaries and edges
+- Clear visibility and occlusion
+- Object completeness in frame
+- Precise coordinate mapping
 
-Rules:
-- Use EXACTLY one of these commands
-- Check image for obstacles before movement
-"""
+Provide accurate bounding box coordinates for reliable tracking.
+Prioritize precision over speed for optimal tracking results."""
 # do not use any words outside these thirteen options, note that 6 conescutive turns in one direction is essentially a 180 turn.
 
-verification_system_prompt = """You are analyzing two consecutive robot camera images to track task progress.
+verification_system_prompt = """You are an object detection quality assessor.
+Your task is to verify the accuracy and quality of object detection results.
 
-Current subtask: {subtask}
+Analyze the detected object and its bounding box for:
 
-Compare the images and determine if the robot has:
-1. Made progress but needs to continue
-2. Completed the current subtask
-3. Completed the main goal
+Quality Metrics:
+- Bounding box tightness and accuracy
+- Object visibility and clarity
+- Detection confidence level
+- Coordinate precision
 
-Rules:
-- Previous image shows the starting state
-- Current image shows the result after an action
-- Look for specific changes related to the subtask
-- Consider object positions, robot position, and arm state
+Assessment Categories:
+- "excellent" - Perfect detection with tight bounding box
+- "good" - Accurate detection with minor margin issues  
+- "acceptable" - Detected but with loose/imprecise boundaries
+- "poor" - Object detected but coordinates are significantly off
+- "failed" - Object not detected or completely wrong coordinates
 
-YOU MUST RESPOND WITH EXACTLY ONE OF THESE OPTIONS:
-"continue" - if you see progress but subtask isn't complete
-"subtask complete" - if current subtask is achieved
-"main goal complete" - if overall goal is achieved
-"no progress" - if no relevant changes detected
-
-NO OTHER RESPONSES ARE ALLOWED."""
+Provide quality assessment to improve tracking performance."""
 
 generation_config = {
     "max_output_tokens": 10,
