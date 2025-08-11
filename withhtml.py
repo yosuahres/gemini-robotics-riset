@@ -9,7 +9,7 @@ from google.genai import types
 
 API_KEY = os.getenv("GOOGLE_API_KEY")
 MODEL_ID = "gemini-2.5-pro"
-DEFAULT_IMAGE_PATH = "image-testing/multiplekursi.jpeg"
+DEFAULT_IMAGE_PATH = "image-testing/kettlelab.png"
 
 def initialize_client(api_key):
     return genai.Client(api_key=api_key)
@@ -288,7 +288,8 @@ if __name__ == "__main__":
 
     if pointing_image:
         pointing_prompt = """
-          Pinpoint no more than 10 items in the image.
+          Pinpoint switches or controls on the device.
+          Switches or controls can be buttons, knobs, levers, dials, touchscreens, or any other interactive element.
           The answer should follow the json format: [{"point": <point>, "label": <label1>}, ...]. The points are in [y, x] format normalized to 0-1000. One element a line.
           Explain how to use each part, put them in the label field, remove duplicated parts and instructions.
         """
@@ -300,7 +301,7 @@ if __name__ == "__main__":
             
             pointing_image_with_results = pointing_image.copy()
             draw_points(pointing_image_with_results, points)
-            pointing_image_with_results.save("results/pointing_results.jpg")
+            pointing_image_with_results.convert('RGB').save("results/pointing_results.jpg")
             print("Pointing results saved to results/pointing_results.jpg")
             
             html_content = generate_point_html(pointing_image.copy(), points)

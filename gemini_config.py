@@ -1,7 +1,5 @@
 import vertexai.preview.generative_models as generative_models
 
-OBJECT_TO_TRACK = "human nose"
-
 goal_setter_system_prompt = """You are an object detection and localization system for robotics.
 Your task is to analyze images and provide precise bounding box coordinates for objects.
 
@@ -30,7 +28,6 @@ Focus on:
 
 Provide accurate bounding box coordinates for reliable tracking.
 Prioritize precision over speed for optimal tracking results."""
-# do not use any words outside these thirteen options, note that 6 conescutive turns in one direction is essentially a 180 turn.
 
 verification_system_prompt = """You are an object detection quality assessor.
 Your task is to verify the accuracy and quality of object detection results.
@@ -52,9 +49,34 @@ Assessment Categories:
 
 Provide quality assessment to improve tracking performance."""
 
+scene_analyzer_prompt = """You are a robotic assistant tasked with understanding a scene.
+Analyze the provided image and identify all significant objects a user might interact with.
+
+Return ONLY a JSON object containing a list of objects. Each object should have:
+- "object_name": A short, descriptive name (e.g., "blue cup", "light switch").
+- "function": A brief description of what the object does (e.g., "for drinking", "toggles power").
+- "box_2d": The bounding box coordinates [top, left, bottom, right], normalized from 0-1000.
+
+Example format:
+{
+  "objects": [
+    {
+      "object_name": "kettle",
+      "function": "used for boiling water",
+      "box_2d": [350, 450, 650, 550]
+    },
+    {
+      "object_name": "power button",
+      "function": "toggles the kettle on or off",
+      "box_2d": [580, 490, 620, 510]
+    }
+  ]
+}
+"""
+
 generation_config = {
-    "max_output_tokens": 100,  # Increased for JSON responses
-    "temperature": 0.1,
+    "max_output_tokens": 8192,
+    "temperature": 0.2,
     "top_p": 0.3,
     "top_k": 10,
 }
