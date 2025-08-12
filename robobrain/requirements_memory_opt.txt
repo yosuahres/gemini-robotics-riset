@@ -1,0 +1,8 @@
+# Additional packages for memory optimization
+bitsandbytes>=0.41.0
+accelerate>=0.20.0
+psutil>=5.9.0
+
+# Optional: for even better memory management
+xformers>=0.0.20  # Memory-efficient attention
+flash-attn>=2.5.0  # Flash attention implementation
