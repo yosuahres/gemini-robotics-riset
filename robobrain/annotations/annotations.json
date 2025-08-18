@@ -1,0 +1,79 @@
+{
+    "fibula biru.png": {
+        "id": 1755536230,
+        "meta_data": {
+            "original_dataset": "bridge",
+            "original_width": 1080,
+            "original_height": 1080
+        },
+        "instruction": "ayam",
+        "points": [
+            [
+                460.796875,
+                323.125
+            ],
+            [
+                913.796875,
+                331.125
+            ],
+            [
+                766.796875,
+                607.125
+            ]
+        ]
+    },
+    "mandibula warna.png": {
+        "id": 1755536240,
+        "meta_data": {
+            "original_dataset": "bridge",
+            "original_width": 1080,
+            "original_height": 1080
+        },
+        "instruction": "goblok",
+        "points": [
+            [
+                524.796875,
+                241.125
+            ],
+            [
+                990.796875,
+                295.125
+            ],
+            [
+                908.796875,
+                745.125
+            ],
+            [
+                521.796875,
+                369.125
+            ]
+        ]
+    },
+    "fibula.png": {
+        "id": 1755536247,
+        "meta_data": {
+            "original_dataset": "bridge",
+            "original_width": 1080,
+            "original_height": 1080
+        },
+        "instruction": "kuontol",
+        "points": [
+            [
+                749.796875,
+                247.125
+            ],
+            [
+                902.796875,
+                716.125
+            ],
+            [
+                478.796875,
+                698.125
+            ],
+            [
+                513.796875,
+                176.125
+            ]
+        ]
+    }
+}

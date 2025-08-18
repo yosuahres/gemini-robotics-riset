@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trajectory Annotation Tool</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Trajectory Annotation Tool</h1>
+    <div class="container">
+        <div class="main-view">
+            <canvas id="annotation-canvas"></canvas>
+        </div>
+        <div class="controls">
+            <input type="file" id="image-upload" multiple>
+            <!-- <button id="undo-btn">Undo</button>
+            <button id="clear-btn">Clear</button> -->
+            <button id="save-btn">Save</button>
+            <input type="text" id="instruction-input" placeholder="Enter instruction...">
+        </div>
+        <div class="thumbnail-gallery">
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
