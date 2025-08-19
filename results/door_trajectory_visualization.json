@@ -1,0 +1,32 @@
+{
+  "source_image": "image-testing/door.jpg",
+  "trajectory_points": [
+    [
+      175,
+      268
+    ],
+    [
+      172,
+      285
+    ],
+    [
+      163,
+      300
+    ]
+  ],
+  "image_coordinates": [
+    [
+      175,
+      268
+    ],
+    [
+      172,
+      285
+    ],
+    [
+      163,
+      300
+    ]
+  ],
+  "point_count": 3
+}

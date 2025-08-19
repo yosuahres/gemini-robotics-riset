@@ -74,6 +74,8 @@ Example format:
 }
 """
 
+trajectory_prompt = """You are a robot using the joint control. The task is \"{task}\". Please predict up to 10 key trajectory points to complete the task. Your answer should be formatted as a list of tuples, i.e. [[x1, y1], [x2, y2], ...], where each tuple contains the x and y coordinates of a point."""
+
 generation_config = {
     "max_output_tokens": 8192,
     "temperature": 0.2,
