@@ -49,3 +49,19 @@ body {
 .thumbnail-gallery img.active {
     border-color: blue;
 }
+
+.color-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.color-btn {
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+}
+
+.color-btn.active {
+    background-color: #ddd;
+}

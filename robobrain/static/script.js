@@ -3,13 +3,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const thumbnailGallery = document.querySelector('.thumbnail-gallery');
     const canvas = document.getElementById('annotation-canvas');
     const ctx = canvas.getContext('2d');
-    const undoBtn = document.getElementById('undo-btn');
-    const clearBtn = document.getElementById('clear-btn');
     const saveBtn = document.getElementById('save-btn');
     const instructionInput = document.getElementById('instruction-input');
+    const colorXBtn = document.getElementById('color-x');
+    const colorYBtn = document.getElementById('color-y');
+    const colorZBtn = document.getElementById('color-z');
+    const currentColorSpan = document.getElementById('current-color');
 
     let images = [];
     let activeImageIndex = -1;
+    let currentColor = 'x';
+    const colors = {
+        'x': 'red',
+        'y': 'green',
+        'z': 'blue'
+    };
 
     async function fetchImages() {
         const response = await fetch('/images');
@@ -82,17 +90,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const trajectory = images[activeImageIndex].trajectory;
         ctx.lineWidth = 2;
-        ctx.strokeStyle = 'red';
 
         for (let i = 0; i < trajectory.length; i++) {
             const point = trajectory[i];
+            const color = colors[point[2]];
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+
             ctx.beginPath();
             ctx.arc(point[0], point[1], 5, 0, 2 * Math.PI);
-            ctx.fillStyle = 'red';
             ctx.fill();
 
             if (i > 0) {
                 const prevPoint = trajectory[i - 1];
+                const prevColor = colors[prevPoint[2]];
+                ctx.strokeStyle = prevColor;
                 ctx.beginPath();
                 ctx.moveTo(prevPoint[0], prevPoint[1]);
                 ctx.lineTo(point[0], point[1]);
@@ -108,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
 
-        images[activeImageIndex].trajectory.push([x, y]);
+        images[activeImageIndex].trajectory.push([x, y, currentColor]);
         redrawCanvas();
     });
 
@@ -116,19 +128,17 @@ document.addEventListener('DOMContentLoaded', () => {
         setActiveImage((activeImageIndex + 1) % images.length);
     });
 
-    undoBtn.addEventListener('click', () => {
-        if (activeImageIndex !== -1 && images[activeImageIndex].trajectory.length > 0) {
-            images[activeImageIndex].trajectory.pop();
-            redrawCanvas();
-        }
-    });
+    function setCurrentColor(color) {
+        currentColor = color;
+        currentColorSpan.textContent = color.toUpperCase();
+        colorXBtn.classList.toggle('active', color === 'x');
+        colorYBtn.classList.toggle('active', color === 'y');
+        colorZBtn.classList.toggle('active', color === 'z');
+    }
 
-    clearBtn.addEventListener('click', () => {
-        if (activeImageIndex !== -1) {
-            images[activeImageIndex].trajectory = [];
-            redrawCanvas();
-        }
-    });
+    colorXBtn.addEventListener('click', () => setCurrentColor('x'));
+    colorYBtn.addEventListener('click', () => setCurrentColor('y'));
+    colorZBtn.addEventListener('click', () => setCurrentColor('z'));
 
     saveBtn.addEventListener('click', async () => {
         if (activeImageIndex !== -1) {
