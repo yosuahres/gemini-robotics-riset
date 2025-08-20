@@ -39,15 +39,22 @@ def plan_trajectory(task, image_path=None):
         print(f"⚠️  Warning: Image file not found: {image_path}")
         print("   Proceeding without image context...")
     
-    response = client.models.generate_content(
-        model="gemini-2.5-pro",
-        contents=contents,
-        config=genai.types.GenerateContentConfig(
-            max_output_tokens=8192,
-            temperature=0.2
-            # Removed response_mime_type to see raw response
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents,
+            config=genai.types.GenerateContentConfig(
+                max_output_tokens=8192,
+                temperature=0.2
+            )
         )
-    )
+    except Exception as api_error:
+        if "429" in str(api_error) or "RESOURCE_EXHAUSTED" in str(api_error):
+            print("⚠️  API quota exceeded. Cannot generate trajectory.")
+            return None
+        else:
+            print(f"⚠️  API error: {api_error}")
+            return None
 
     # Check if response is valid
     if not response:
@@ -133,6 +140,61 @@ def plan_trajectory(task, image_path=None):
         except Exception as manual_error:
             print(f"Manual extraction also failed: {manual_error}")
         
+        print("⚠️  All parsing methods failed. No trajectory generated.")
+        return None
+
+
+def parse_trajectory_response(response_text):
+    """Parse trajectory points from API response text."""
+    try:
+        # Clean the response text
+        clean_text = response_text.strip()
+        
+        # Remove markdown code blocks
+        if clean_text.startswith("```"):
+            lines = clean_text.split('\n')
+            clean_text = '\n'.join(lines[1:-1])
+        
+        clean_text = clean_text.strip()
+        
+        # Try to extract coordinate list patterns
+        import re
+        
+        # Pattern 1: [[x1,y1],[x2,y2],...]
+        list_pattern = r'\[\s*\[\s*[\d.]+\s*,\s*[\d.]+\s*\](?:\s*,\s*\[\s*[\d.]+\s*,\s*[\d.]+\s*\])*\s*\]'
+        match = re.search(list_pattern, clean_text)
+        
+        if match:
+            list_text = match.group()
+            print(f"Found coordinate list: {list_text}")
+            try:
+                trajectory_points = json.loads(list_text)
+                if isinstance(trajectory_points, list) and len(trajectory_points) > 0:
+                    return trajectory_points
+            except json.JSONDecodeError:
+                pass
+        
+        # Pattern 2: Individual coordinate pairs
+        coord_pattern = r'\[(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)\]'
+        coordinates = re.findall(coord_pattern, clean_text)
+        
+        if coordinates:
+            trajectory_points = [[float(x), float(y)] for x, y in coordinates]
+            print(f"Extracted {len(trajectory_points)} coordinate pairs")
+            return trajectory_points
+        
+        # Pattern 3: Try parsing as direct JSON
+        try:
+            trajectory_points = json.loads(clean_text)
+            if isinstance(trajectory_points, list):
+                return trajectory_points
+        except json.JSONDecodeError:
+            pass
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error parsing response: {e}")
         return None
 
 
@@ -197,44 +259,23 @@ def draw_trajectory_on_image(image_path, trajectory_points, output_path="results
             # Different colors and sizes for start, middle, and end points
             if i == 0:
                 # Start point - green circle
-                radius = 8
+                radius = 4
                 color = (0, 255, 0)  # Green
                 label = "START"
             elif i == len(image_coords) - 1:
                 # End point - red circle
-                radius = 8
+                radius = 4
                 color = (255, 0, 0)  # Red
                 label = "END"
             else:
                 # Middle points - yellow circles
-                radius = 5
+                radius = 2
                 color = (255, 255, 0)  # Yellow
                 label = str(i)
             
             # Draw circle
             draw.ellipse([x - radius, y - radius, x + radius, y + radius], 
                         fill=color, outline=(0, 0, 0), width=2)
-            
-            # Draw point number/label
-            try:
-                # Try to use a default font
-                font = ImageFont.load_default()
-                text_bbox = draw.textbbox((0, 0), label, font=font)
-                text_width = text_bbox[2] - text_bbox[0]
-                text_height = text_bbox[3] - text_bbox[1]
-                
-                text_x = x - text_width // 2
-                text_y = y - radius - text_height - 5
-                
-                # Draw text background
-                draw.rectangle([text_x - 2, text_y - 2, text_x + text_width + 2, text_y + text_height + 2], 
-                              fill=(255, 255, 255), outline=(0, 0, 0))
-                
-                # Draw text
-                draw.text((text_x, text_y), label, fill=(0, 0, 0), font=font)
-            except:
-                # Fallback if font loading fails
-                draw.text((x + radius + 5, y - 5), label, fill=(0, 0, 0))
         
         # Add title
         title = f"Trajectory Plan ({len(trajectory_points)} points)"
@@ -272,8 +313,8 @@ if __name__ == '__main__':
     print("=" * 40)
     
     # Use a single image for trajectory planning
-    image_path = "image-testing/door.jpg"
-    task_description = "Press the door handle down"
+    image_path = "image-testing/door2.jpg"
+    task_description = "operate lever door handle by pressing down to open door"
     
     print(f"Task: {task_description}")
     print(f"Image: {image_path}")
